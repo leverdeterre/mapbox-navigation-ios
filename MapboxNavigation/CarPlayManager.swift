@@ -55,8 +55,19 @@ public class CarPlayManager: NSObject {
         }
     }
 
+    var trackingStateObservation: NSKeyValueObservation?
+    
     public fileprivate(set) var mainMapTemplate: CPMapTemplate?
-    public fileprivate(set) weak var currentNavigator: CarPlayNavigationViewController?
+    public fileprivate(set) weak var currentNavigator: CarPlayNavigationViewController? {
+        didSet {
+            if let controller = currentNavigator {
+                trackingStateObservation = controller.observe(\.tracksUserCourse) { [weak self] (controller, change) in
+                    let imageName = controller.tracksUserCourse ? "carplay_overview" : "carplay_locate"
+                    self?.trackingStateButton.image = UIImage(named: imageName, in: .mapboxNavigation, compatibleWith: nil)
+                }
+            }
+        }
+    }
 
     internal var mapTemplateProvider: MapTemplateProvider
 
@@ -142,19 +153,23 @@ public class CarPlayManager: NSObject {
     /**
      The bar button that shows the selected route overview on the map.
      */
-    @objc public lazy var overviewButton: CPMapButton = {
-        let overviewButton = CPMapButton { button in
+    @objc public lazy var trackingStateButton: CPMapButton = {
+        let trackingStateButton = CPMapButton { button in
             guard let navigationViewController = self.currentNavigator else {
                 return
             }
             navigationViewController.tracksUserCourse = !navigationViewController.tracksUserCourse
-            
-            let imageName = navigationViewController.tracksUserCourse ? "carplay_overview" : "carplay_locate"
-            button.image = UIImage(named: imageName, in: .mapboxNavigation, compatibleWith: nil)
         }
-        overviewButton.image = UIImage(named: "carplay_overview", in: .mapboxNavigation, compatibleWith: nil)
-        return overviewButton
+        
+        trackingStateButton.image = UIImage(named: "carplay_overview", in: .mapboxNavigation, compatibleWith: nil)
+        
+        return trackingStateButton
     }()
+    
+    @available(*, deprecated, renamed: "trackingStateButton")
+    @objc public var overviewButton: CPMapButton {
+        get { return trackingStateButton }
+    }
     
     lazy var fullDateComponentsFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -554,7 +569,7 @@ extension CarPlayManager: CPMapTemplateDelegate {
             let mapButtons = delegate?.carPlayManager?(self, mapButtonsCompatibleWith: carPlayMapViewController.traitCollection, in: mapTemplate, for: .navigating) {
             mapTemplate.mapButtons = mapButtons
         } else {
-            mapTemplate.mapButtons = [overviewButton, showFeedbackButton]
+            mapTemplate.mapButtons = [trackingStateButton, showFeedbackButton]
         }
 
         if let rootViewController = carPlayMapViewController,
